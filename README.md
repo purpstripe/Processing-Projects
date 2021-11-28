@@ -1,2 +1,2 @@
-# C-Database-Project
-A collection of data structures and functionality for handling student, department, and degree data in C - mock data
+# Processing Projects
+A collection of generative art, visual animation, music visualizers, and educational examples from The Coding Train.
