@@ -1,0 +1,1 @@
+Make sure to install Minim for all of these programs!
