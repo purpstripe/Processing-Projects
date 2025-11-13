@@ -7,6 +7,8 @@ import ddf.minim.analysis.*;
 Minim minim;
 AudioPlayer song;
 FFT fft;
+//BeatDetect beat;
+//BeatListener bl;
 
 // for processing.sound
 //SoundFile sample;
@@ -40,14 +42,16 @@ float randY;
 float ynoise;
 float noiseScale;
 float noiseStep;
-Envelope radEnv;
+Envelope dotEnv;
 Envelope colorEnv;
+Envelope fillEnv;
 color startColor;
 color endColor;
 float songDuration;
 int totalFrames;
 
 float bass;
+float snare;
 float smoothing = 0.8;
 float[] smoothed;
 
@@ -70,6 +74,7 @@ void setup() {
   // Return an AudioPlayer object, called song
   song = minim.loadFile("avery.wav", bufferSize);
   song.play();
+  
   // Create FFT object using the same buffer size and sample rate as the song
   fft = new FFT(song.bufferSize(), song.sampleRate());
   // tells Minim to regroup those FFT bins into logarithmic averages — more meaningful, ear-like frequency bands
@@ -80,11 +85,20 @@ void setup() {
   // stores a time-smoothed version of fft.getAvg(i), so your bars don’t jitter
   smoothed = new float[fft.avgSize()];
   
+  // beat detector for the different instrument threasholds
+  // if (beat.isKick())
+  // if (beat.isSnare())
+  // if (beat.isHat())
+  //beat = new BeatDetect(song.bufferSize(), song.sampleRate());
+  //beat.detectMode(BeatDetect.FREQ_ENERGY);
+  // BeatListener helps sync detection with the audio stream
+  // bl = new BeatListener(beat, song);
+  
   // setting frames per second
   int fps = 60;
   frameRate(fps);
   // using minim to get total frames for the animation fo this song
-  // converting our of milliseconds
+  // converting out of milliseconds
   songDuration = song.length() / 1000.0;
   // total frames of the song to match with song duration (at 60fps)
   totalFrames = int(songDuration * fps);
@@ -104,8 +118,9 @@ void setup() {
   //fft.input(in);
   
   // envelop objects controlling the radius of the dots and the color of elements
-  radEnv = new Envelope();
+  dotEnv = new Envelope();
   colorEnv = new Envelope();
+  fillEnv = new Envelope();
 
   // initial radius
   radius = 200;
@@ -149,14 +164,18 @@ void draw() {
   int col = lerpColor(startColor, endColor, colorEnv.value);
   stroke(col);
   
+  fillEnv.update();
+  float fillAlpha = lerp(0, 255, fillEnv.value);
+  fill(col, fillAlpha);
+  
   // getting FFT analysis with Minim approach
   fft.forward(song.mix);
   // displaying log scaled frequency bars that have been smoothed in animation
-  int barScaling = 3;
+  int barHeightScaling = 3;
   for (int i = 0; i < fft.avgSize(); i++) {
     smoothed[i] = lerp(smoothed[i], fft.getAvg(i), 1 - smoothing);
     float x = map(i, 0, fft.avgSize(), 0, width);
-    float h = smoothed[i] * barScaling;
+    float h = smoothed[i] * barHeightScaling;
     rect(x, height - h, width/fft.avgSize(), h);
   }
   //for (int i = 0; i < fft.specSize(); i++) {
@@ -169,41 +188,58 @@ void draw() {
   ellipse(centX, centY, radius*2, radius*2);
 
   // updating the position of the dancey dots
-  radEnv.update();  
+  dotEnv.update();  
 
   // drawing all of the dancey dots
   // 360 degrees with a step of 5
   for (float ang = 0; ang < 360; ang += 5) {
     float rad = radians(ang);
     xnoise = xnoise + noiseStep;
-    //randX = noise(xnoise) * 10 + (radEnv.value * noise(xnoise) * 40);
-    randX = radEnv.value * noise(xnoise) * noiseScale;
+    //randX = noise(xnoise) * 10 + (dotEnv.value * noise(xnoise) * 40);
+    randX = dotEnv.value * noise(xnoise) * noiseScale;
     ynoise = ynoise + noiseStep;
-    //randY = noise(ynoise) * 10 + (radEnv.value * noise(ynoise) * 40);
-    randY = radEnv.value * noise(ynoise) * noiseScale;
+    //randY = noise(ynoise) * 10 + (dotEnv.value * noise(ynoise) * 40);
+    randY = dotEnv.value * noise(ynoise) * noiseScale;
     x = centX + ( (radius+randX) * cos(rad));
     y = centY + ( (radius+randY) * sin(rad));
     point(x, y);
   }
-  
+    
   // bass frequency threshold for animation reaction
+  // 20Hz to 150Hz
   bass = fft.calcAvg(20,150);
   if (bass > 45) {
-    radEnv.start();
+    dotEnv.start();
     colorEnv.start();
     endColor = color(random(255), random(255), random(255));
   }
   
-  //startBand = 0;
-  //endBand = 7;
-  //if (sumThreasholdPassed(startBand, endBand, 0.80)) {
-  //  radEnv.start();
+  // snare scale increases snare value to find an easier threashold
+  int snareScale = 2;
+  snare = fft.calcAvg(2500, 3500) * snareScale;
+  println(snare);
+  if (snare > 7.5) {
+    fillEnv.start();
+  }
+  
+  // using beat listener instead
+  //if (beat.isKick()) {
+  //  dotEnv.start();
   //  colorEnv.start();
   //  endColor = color(random(255), random(255), random(255));
   //}
   
-  //saveFrame("frames/frame-####.png");
+  //startBand = 0;
+  //endBand = 7;
+  //if (sumThreasholdPassed(startBand, endBand, 0.80)) {
+  //  dotEnv.start();
+  //  colorEnv.start();
+  //  endColor = color(random(255), random(255), random(255));
+  //}
   
+  // saving frames for turning the animation into video
+  //saveFrame("frames/frame-####.png");
+  //// exit animation at the end of the song
   //if (frameCount >= totalFrames) {
   //  exit();
   //}
@@ -213,7 +249,7 @@ void draw() {
 // mouse pressed test
 
 //void mousePressed() {
-//  radEnv.start();
+//  dotEnv.start();
 //  colorEnv.start();
 //  endColor = color(random(255), random(255), random(255));
 //}
