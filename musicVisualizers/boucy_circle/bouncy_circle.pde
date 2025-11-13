@@ -1,38 +1,34 @@
-//import ddf.minim.*;
-//import ddf.minim.analysis.*;
-//import ddf.minim.effects.*;
-//import ddf.minim.signals.*;
-//import ddf.minim.spi.*;
-//import ddf.minim.ugens.*;
+import ddf.minim.*;
+import ddf.minim.analysis.*;
 
- import processing.sound.*;
-//import ddf.minim.*;
+// import processing.sound.*;
 
 // Declare the sound source and FFT analyzer variables
-//Minim minim;
-//AudioPlayer song;
+Minim minim;
+AudioPlayer song;
 FFT fft;
 
-SoundFile sample;
+// for processing.sound
+//SoundFile sample;
 //AudioIn in;
 
 // Define how many FFT bands to use (this needs to be a power of two)
-int bands = 512;
+// int bands = 512;
 // Create a vector to store the smoothed spectrum data in
-float[] sum = new float[bands];
+// float[] sum = new float[bands];
 // Define a smoothing factor which determines how much the spectrums of consecutive
 // points in time should be combined to create a smoother visualisation of the spectrum.
 // A smoothing factor of 1.0 means no smoothing (only the data from the newest analysis
 // is rendered), decrease the factor down towards 0.0 to have the visualisation update
 // more slowly, which is easier on the eye.
-float smoothingFactor = 0.2;
+// float smoothingFactor = 0.2;
 // Variables for drawing the spectrum:
 // Declare a scaling factor for adjusting the height of the rectangles
-int scale = 5;
+// int scale = 5;
 // Declare a drawing variable for calculating the width of the
-float barWidth;
-int startBand;
-int endBand;
+//float barWidth;
+//int startBand;
+//int endBand;
 
 float radius;
 int centX;
@@ -51,90 +47,132 @@ color endColor;
 float songDuration;
 int totalFrames;
 
+float bass;
+float smoothing = 0.8;
+float[] smoothed;
+
+
 void setup() {
   size(1024, 720);
   background(0);
   // Calculate the width of the rects depending on how many bands we have
-  barWidth = width/float(bands);
+  // barWidth = width/float(bands);
   
-  // Load and play a soundfile and loop it.
-  sample = new SoundFile(this, "avery.wav");
-  sample.play();
+  // Load and play a soundfile and loop it with processing.sound
+  //sample = new SoundFile(this, "avery.wav");
+  //sample.play();
   // sample.loop();
   
-  // minim = new Minim(this);
-  // song = minim.loadFile("avery.wav");
-  // song.play();
-  // Create FFT object using the same buffer size and sample rate
-  // fft = new FFT(song.bufferSize(), song.sampleRate());
+  // using minim
+  minim = new Minim(this);
+  // samples per analysis frame — determines FFT resolution and playback smoothness
+  int bufferSize = 1024;
+  // Return an AudioPlayer object, called song
+  song = minim.loadFile("avery.wav", bufferSize);
+  song.play();
+  // Create FFT object using the same buffer size and sample rate as the song
+  fft = new FFT(song.bufferSize(), song.sampleRate());
+  // tells Minim to regroup those FFT bins into logarithmic averages — more meaningful, ear-like frequency bands
+  int startingFreq = 60;
+  int bandsPerOctave = 7;
+  fft.logAverages(startingFreq, bandsPerOctave);
+  // array with one element per averaged frequency band in your FFT
+  // stores a time-smoothed version of fft.getAvg(i), so your bars don’t jitter
+  smoothed = new float[fft.avgSize()];
   
+  // setting frames per second
   int fps = 60;
   frameRate(fps);
-  // three minutes and six seconds
-  // songDuration = song.length() / 1000.0;
+  // using minim to get total frames for the animation fo this song
+  // converting our of milliseconds
+  songDuration = song.length() / 1000.0;
   // total frames of the song to match with song duration (at 60fps)
-  // totalFrames = int(songDuration * fps);
-  // println("Duration: " + songDuration + " sec (" + totalFrames + " frames)");
+  totalFrames = int(songDuration * fps);
+  println("Duration: " + songDuration + " sec (" + totalFrames + " frames)");
 
   // Create the FFT analyzer and connect the playing soundfile or mic to it.
-   fft = new FFT(this, bands);
+  // for processing.sound approach
+  // fft = new FFT(this, bands);
+  // connect the playing soundfile
+  // fft.input(sample);
+  
+  // for audio from the mic
   //in = new AudioIn(this, 0);
-
   // start the Audio Input
   //in.start();
-
   // patch the AudioIn
   //fft.input(in);
   
-  // connect the playing soundfile
-   fft.input(sample);
-
+  // envelop objects controlling the radius of the dots and the color of elements
   radEnv = new Envelope();
   colorEnv = new Envelope();
 
+  // initial radius
   radius = 200;
+  // centering the cicle
   centX = width/2;
   centY = height/2;
+  // noise for the dots
   xnoise = random(1);
   ynoise = random(1);
+  // scaling the noise
   noiseScale = radius / 2;
   noiseStep = 0.5;
 
+  // stroke for all the visual elements
   strokeWeight(5);
   smooth();
   noFill();
+  // starting and ending color for the elements
   startColor = color(255, 255, 255);
-  endColor = color(255, 255, 255);
+  endColor = color(255, 255, 255);   // ending color is random and used when the bass hits
 }
 
 void draw() {
   background(0);
   
+  // timing for temporal based animation with frames
   // float t = (float)frameCount / totalFrames;
   // float timeSec = t * songDuration;
   
-   fft.analyze();
-  //fft.forward(song.mix);
+  // getting the FFT analysis with processing.sound approach
+  // fft.analyze();
+  //for (int i = 0; i < bands; i++) {
+  //  // Smooth the FFT spectrum data by smoothing factor
+  //  sum[i] += (fft.spectrum[i] - sum[i]) * smoothingFactor;
+  //  // Draw the rectangles, adjust their height using the scale factor
+  //  rect(i*barWidth, height, barWidth, -sum[i]*height*scale);
+  //}
+  
+  // updating the color every draw loop
+  colorEnv.update();
+  int col = lerpColor(startColor, endColor, colorEnv.value);
+  stroke(col);
+  
+  // getting FFT analysis with Minim approach
+  fft.forward(song.mix);
+  // displaying log scaled frequency bars that have been smoothed in animation
+  int barScaling = 3;
+  for (int i = 0; i < fft.avgSize(); i++) {
+    smoothed[i] = lerp(smoothed[i], fft.getAvg(i), 1 - smoothing);
+    float x = map(i, 0, fft.avgSize(), 0, width);
+    float h = smoothed[i] * barScaling;
+    rect(x, height - h, width/fft.avgSize(), h);
+  }
   //for (int i = 0; i < fft.specSize(); i++) {
   //  float x = map(i, 0, fft.specSize(), 0, width);
   //  float h = fft.getBand(i) * 8;
   //  line(x, height, x, height - h);
   //}
-  for (int i = 0; i < bands; i++) {
-    // Smooth the FFT spectrum data by smoothing factor
-    sum[i] += (fft.spectrum[i] - sum[i]) * smoothingFactor;
-
-    // Draw the rectangles, adjust their height using the scale factor
-    rect(i*barWidth, height, barWidth, -sum[i]*height*scale);
-  }
-
-  colorEnv.update();
-  int col = lerpColor(startColor, endColor, colorEnv.value);
-  stroke(col);
+  
+  // drawing our static ellipse
   ellipse(centX, centY, radius*2, radius*2);
 
+  // updating the position of the dancey dots
   radEnv.update();  
 
+  // drawing all of the dancey dots
+  // 360 degrees with a step of 5
   for (float ang = 0; ang < 360; ang += 5) {
     float rad = radians(ang);
     xnoise = xnoise + noiseStep;
@@ -148,13 +186,21 @@ void draw() {
     point(x, y);
   }
   
-  startBand = 0;
-  endBand = 7;
-  if (sumThreasholdPassed(startBand, endBand, 0.80)) {
+  // bass frequency threshold for animation reaction
+  bass = fft.calcAvg(20,150);
+  if (bass > 45) {
     radEnv.start();
     colorEnv.start();
     endColor = color(random(255), random(255), random(255));
   }
+  
+  //startBand = 0;
+  //endBand = 7;
+  //if (sumThreasholdPassed(startBand, endBand, 0.80)) {
+  //  radEnv.start();
+  //  colorEnv.start();
+  //  endColor = color(random(255), random(255), random(255));
+  //}
   
   //saveFrame("frames/frame-####.png");
   
@@ -163,6 +209,9 @@ void draw() {
   //}
 }
 
+
+// mouse pressed test
+
 //void mousePressed() {
 //  radEnv.start();
 //  colorEnv.start();
@@ -170,30 +219,28 @@ void draw() {
 //}
 
 
+// Custom threashold functions
+
+//boolean threasholdPassed(int startBand, int len, float threashold) {
+//  for (int i = startBand; i < len; i++) {  
+//    if (fft.spectrum[i] > threashold) {
+//     return true;
+//     }
+//  }
+//  return false;
+//}
 
 
-
-boolean threasholdPassed(int startBand, int len, float threashold) {
-  for (int i = startBand; i < len; i++) {  
-    if (fft.spectrum[i] > threashold) {
-     return true;
-     }
-  }
-  return false;
-}
-
-
-boolean sumThreasholdPassed(int startBand, int len, float threashold) {
-  float sum = 0;
-  for (int i = startBand; i < len; i++) {  
-    sum = sum + fft.spectrum[i];
-  }
-  if (sum > threashold) {
-     return true;
-  }
-  return false;
-}
-
+//boolean sumThreasholdPassed(int startBand, int len, float threashold) {
+//  float sum = 0;
+//  for (int i = startBand; i < len; i++) {  
+//    sum = sum + fft.spectrum[i];
+//  }
+//  if (sum > threashold) {
+//     return true;
+//  }
+//  return false;
+//}
 
 //boolean avgThreasholdPassed(int startBand, int len, float threashold) {
 //  float avgSum = 0;
