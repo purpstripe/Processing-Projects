@@ -71,16 +71,12 @@ void draw() {
   fill(255);
   ellipse(0, 0, rad, rad);
 
-  for (int i = 0, len = particles.size(); i < len; i++) {
+  for (int i = particles.size() - 1; i >= 0; i--) {
     particles.get(i).updateMe();
-    if (!particles.get(i).dead) {
+    if (particles.get(i).dead) {
+      particles.remove(i);
+    } else {
       particles.get(i).drawMe();
-    }
-    // loop backwards for removal
-    for (int j = particles.size(); j < 0; j--) {
-      if (particles.get(i).dead) {
-        particles.remove(i);
-      }
     }
   }
 
