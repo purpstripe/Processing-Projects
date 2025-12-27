@@ -21,7 +21,7 @@ class Particle {
     maxRad = 5;
     fillColor1 = 0x4ff3ff99;
     fillColor2 = 0x4f57dcf9;
-    xMin =  -width/2;;
+    xMin =  -width/2;
     xMax = width/2;
     yMin = -height/2;
     yMax = height/2;
